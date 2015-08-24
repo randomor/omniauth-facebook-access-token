@@ -23,6 +23,13 @@ module OmniAuth
         :param_name => 'access_token'
       }
 
+      option :param_names, {
+        access_token: 'access_token',
+        expires_at: 'expires_at',
+        expires_in: 'expires_in',
+        refresh_token: 'refresh_token'
+      }
+
       attr_accessor :access_token
 
       uid { raw_info['id'] }
@@ -79,9 +86,6 @@ module OmniAuth
       end
 
       def callback_phase
-        if !request.params['access_token'] || request.params['access_token'].to_s.empty?
-          raise ArgumentError.new("No access token provided.")
-        end
 
         self.access_token = build_access_token
         self.access_token = self.access_token.refresh! if self.access_token.expired?
@@ -119,13 +123,24 @@ module OmniAuth
       end
 
       def build_access_token
+        if !request_params(:access_token) || request_params(:access_token).to_s.empty?
+          raise ArgumentError.new("No access token provided.")
+        end
         # Options supported by `::OAuth2::AccessToken#initialize` and not overridden by `access_token_options`
-        hash = request.params.slice("access_token", "expires_at", "expires_in", "refresh_token")
+        hash = {}
+        [:access_token, :expires_at, :expires_in, :refresh_token].map do |key|
+          hash[key] = request_params(key)
+        end
+        prune!(hash)
         hash.update(options.access_token_options)
         ::OAuth2::AccessToken.from_hash(
           client,
           hash
         )
+      end
+
+      def request_params(param_key)
+        request.params[options[:param_names][param_key]]
       end
 
       def prune!(hash)
